@@ -1,0 +1,58 @@
+name:                hipio
+version:             0.1.0.0
+synopsis:            Initial project template from stack
+description:         Please see README.md
+homepage:            https://github.com/joehillen/hipio#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Joe Hillenbrand
+maintainer:          joehillen@gmail.com
+copyright:           MIT
+category:            Web
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Lib
+                     , Parse
+  build-depends:       base >= 4.7 && < 5
+                     , dns
+                     , attoparsec
+                     , network
+                     , iproute
+                     , bytestring
+  default-language:    Haskell2010
+
+executable hipio-exe
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -O2
+  build-depends:       base
+                     , hipio
+                     , optparse-applicative
+                     , bytestring
+  default-language:    Haskell2010
+
+test-suite hipio-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  other-modules:       ParseSpec
+  build-depends:       base
+                     , attoparsec
+                     , iproute
+                     , dns
+                     , hipio
+                     , bytestring
+                     , hspec
+                     , hspec-attoparsec
+                     , QuickCheck
+                     , quickcheck-unicode
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/joehillen/hipio
