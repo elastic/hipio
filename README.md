@@ -15,4 +15,6 @@ Usage: hipio-exe DOMAIN [PORT]
 
 Available options:
   -h,--help                Show this help text
+  DOMAIN                   Root wildcard domain.
+  PORT                     Listening UDP port. (default: 53)
 ```

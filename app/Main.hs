@@ -20,8 +20,13 @@ main = do
 options :: Parser (String, Int)
 options =
   (,)
-  <$> (argument str (metavar "DOMAIN"))
+  <$> (argument str
+       (  metavar "DOMAIN"
+       <> help "Root wildcard domain."
+       ))
   <*> (argument auto
        ( metavar "PORT"
        <> value 53
+       <> showDefault
+       <> help "Listening UDP port."
        ))
