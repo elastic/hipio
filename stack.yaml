@@ -1,4 +1,11 @@
 resolver: lts-7.12
 packages:
 - '.'
+- 'log/log-elasticsearch'
+extra-deps:
+- log-0.7
+- log-base-0.7
+- log-postgres-0.7
+- bloodhound-0.12.0.0
+- hpqtypes-1.5.1.1
 compiler-check: newer-minor
