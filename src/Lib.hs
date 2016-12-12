@@ -38,56 +38,6 @@ data Conf = Conf
   }
   deriving Show
 
-timeout' :: SockAddr -> Int -> IO a -> LogT IO (Maybe a)
-timeout' addr tm io = do
-  result <- liftIO $ timeout tm io
-  when (isNothing result) $
-    logAttention_ $ "timeout sending to "<>(T.pack $ show addr)
-  return result
-
-
-handleRequest :: Conf -> DNSMessage -> Maybe DNSMessage
-handleRequest conf req = parseHosts <$> mq
- where
-  filterA = filter ((==A) . qtype)
-  ident = identifier . header $ req
-  mq = listToMaybe . filterA . question $ req
-  parseHosts q =
-    let ip = maybeToList $ parseDomain (confDomain conf) $ qname q
-        rsp = responseA ident q ip
-        setTTL rr = rr { rrttl = confTTL conf }
-        hd = header rsp
-        flgs = (flags hd)
-               { recAvailable = False
-               , authAnswer = not $ Prelude.null ip
-               }
-     in rsp
-        { header = hd { flags = flgs }
-        , answer = map setTTL $ answer rsp
-        }
-
-
-handlePacket :: Conf -> Socket -> SockAddr -> S.ByteString -> LogT IO ()
-handlePacket conf@Conf{..} sock addr bs =
-  case decode $ SL.fromChunks [bs] of
-    Right req -> do
-      case handleRequest conf req of
-        Just rsp -> do
-          let packet = mconcat . SL.toChunks $ encode rsp
-          void $ timeout' addr confTimeout (sendAllTo sock packet addr)
-          case answer rsp of
-            [] -> return ()
-            (ResourceRecord { rdata = (RD_A ip) }):_ ->
-              logInfo "" $ object [
-                  "from" .= (show addr)
-                , "question"  .= (decodeUtf8 . qname . head . question $ req)
-                , "answer" .= show ip
-                ]
-            _ -> return ()
-        Nothing -> return ()
-    Left msg ->
-      logAttention "Failed to decode message" $ object [ "message" .= msg ]
-
 
 serveDNS :: Domain -> Int -> IO ()
 serveDNS domain port = withSocketsDo $ do
@@ -111,3 +61,98 @@ serveDNS domain port = withSocketsDo $ do
     forever $ do
       (bs, addr) <- recvFrom sock (confBufSize conf)
       forkIO $ runLogT "" logger $ handlePacket conf sock addr bs
+
+
+handleRequest :: Conf -> DNSMessage -> DNSMessage
+handleRequest conf req = fromMaybe notFound parseHosts
+ where
+  filterA = filter ((==A) . qtype)
+  ident = identifier . header $ req
+  notFound =
+    defaultResponse
+    { header = (header defaultResponse) { identifier = ident }
+    , question = question req
+    }
+  parseHosts = do
+    q <- listToMaybe . filterA . question $ req
+    let ip = maybeToList $ parseDomain (confDomain conf) $ qname q
+        rsp = responseA ident q ip
+        setTTL rr = rr { rrttl = confTTL conf }
+        hd = header rsp
+        flgs = (flags hd)
+               { recAvailable = False
+               , authAnswer = not $ Prelude.null ip
+               }
+    return $
+      rsp
+      { header = hd { flags = flgs }
+      , answer = map setTTL $ answer rsp
+      }
+
+
+handlePacket :: Conf -> Socket -> SockAddr -> S.ByteString -> LogT IO ()
+handlePacket conf@Conf{..} sock addr bs =
+  case decode $ SL.fromChunks [bs] of
+    Right req -> do
+      let rsp = handleRequest conf req
+      let packet = mconcat . SL.toChunks $ encode rsp
+      void $ timeout' addr confTimeout (sendAllTo sock packet addr)
+      case answer rsp of
+        [] -> return ()
+        (ResourceRecord { rdata = (RD_A ip) }):_ ->
+          logInfo "" $ object [
+              "from" .= (show addr)
+            , "question"  .= (decodeUtf8 . qname . head . question $ req)
+            , "answer" .= show ip
+            ]
+        _ -> return ()
+    Left msg ->
+      logAttention "Failed to decode message" $ object [ "message" .= msg ]
+
+
+timeout' :: SockAddr -> Int -> IO a -> LogT IO (Maybe a)
+timeout' addr tm io = do
+  result <- liftIO $ timeout tm io
+  when (isNothing result) $
+    logAttention_ $ "timeout sending to "<>(T.pack $ show addr)
+  return result
+
+
+
+
+defaultQuery :: DNSMessage
+defaultQuery = DNSMessage {
+    header = DNSHeader {
+       identifier = 0
+     , flags = DNSFlags {
+           qOrR         = QR_Query
+         , opcode       = OP_STD
+         , authAnswer   = False
+         , trunCation   = False
+         , recDesired   = True
+         , recAvailable = False
+         , rcode        = NoErr
+         , authenData   = False
+         }
+     }
+  , question   = []
+  , answer     = []
+  , authority  = []
+  , additional = []
+  }
+
+
+defaultResponse :: DNSMessage
+defaultResponse =
+  let hd = header defaultQuery
+      flg = flags hd
+  in  defaultQuery {
+        header = hd {
+          flags = flg {
+              qOrR = QR_Response
+            , authAnswer = False
+            , recAvailable = False
+            , authenData = False
+            }
+        }
+      }
