@@ -20,3 +20,7 @@ Available options:
   --es URL                 Elasticsearch URL for Logging. Set `ES_USER` and
                            `ES_PASS` environment variables for Basic Auth.
 ```
+
+# Install
+
+Requires `libpq5`
