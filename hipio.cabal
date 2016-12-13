@@ -19,11 +19,13 @@ library
                      , Parse
   build-depends:       base >= 4.7 && < 5
                      , attoparsec
+                     , bloodhound
                      , bytestring
                      , dns
                      , iproute
                      , log
                      , network
+                     , random
                      , text
   default-language:    Haskell2010
 
@@ -35,6 +37,9 @@ executable hipio
                      , hipio
                      , bytestring
                      , optparse-applicative
+                     , optparse-text
+                     , text
+                     , bloodhound
   default-language:    Haskell2010
 
 test-suite hipio-test

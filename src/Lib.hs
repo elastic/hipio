@@ -14,8 +14,10 @@ import qualified Data.ByteString.Lazy       as SL
 import           Data.IP
 import           Data.Maybe
 import           Data.Monoid
+import           Data.Text                  (Text (..))
 import qualified Data.Text                  as T
 import           Data.Text.Encoding         (decodeUtf8)
+import           Database.Bloodhound
 import           Log
 import           Log.Backend.ElasticSearch
 import           Log.Backend.StandardOutput
@@ -24,6 +26,7 @@ import           Network.DNS
 import           Network.Socket             hiding (recvFrom)
 import           Network.Socket.ByteString
 import           System.Environment
+import           System.Random              (randomIO)
 import           System.Timeout
 
 import           Parse
@@ -39,8 +42,11 @@ data Conf = Conf
   deriving Show
 
 
-serveDNS :: Domain -> Int -> IO ()
-serveDNS domain port = withSocketsDo $ do
+type ESConf = (Text, Maybe (EsUsername, EsPassword))
+
+
+serveDNS :: Domain -> Int -> Maybe ESConf -> IO ()
+serveDNS domain port maybeES = withSocketsDo $ do
   let conf =
         Conf
         { confBufSize = 512
@@ -57,10 +63,21 @@ serveDNS domain port = withSocketsDo $ do
   addrinfo <- maybe (fail "no addr info") return (listToMaybe addrinfos)
   sock <- socket (addrFamily addrinfo) Datagram defaultProtocol
   bind sock (addrAddress addrinfo)
-  withSimpleStdOutLogger $ \logger ->
-    forever $ do
-      (bs, addr) <- recvFrom sock (confBufSize conf)
-      forkIO $ runLogT "" logger $ handlePacket conf sock addr bs
+  let doit logger =
+        forever $ do
+          (bs, addr) <- recvFrom sock (confBufSize conf)
+          forkIO $ runLogT "" logger $ handlePacket conf sock addr bs
+  case maybeES of
+    Nothing -> withSimpleStdOutLogger doit
+    Just (url, login) -> do
+      let es =
+            ElasticSearchConfig
+            { esServer = url
+            , esIndex = "logs"
+            , esMapping = "log"
+            , esLogin = login
+            }
+      withElasticSearchLogger es randomIO doit
 
 
 handleRequest :: Conf -> DNSMessage -> DNSMessage
