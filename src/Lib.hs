@@ -34,13 +34,14 @@ import           Parse
 
 
 data Conf = Conf
-  { confBufSize :: !Int
-  , confTTL     :: !Int
-  , confDomain  :: !Domain
-  , confTimeout :: !Int
-  , confPort    :: !Int
-  , confAs      :: ![IPv4]
-  , confNSs     :: ![Domain]
+  { confBufSize  :: !Int
+  , confTTL      :: !Int
+  , confDomain   :: !Domain
+  , confTimeout  :: !Int
+  , confPort     :: !Int
+  , confAs       :: ![IPv4]
+  , confNSs      :: ![Domain]
+  , confSOAemail :: !Domain
   }
   deriving Show
 
@@ -48,17 +49,18 @@ data Conf = Conf
 type ESConf = (Text, Maybe (EsUsername, EsPassword))
 
 
-serveDNS :: Domain -> Int -> [String] -> [String] -> Maybe ESConf -> IO ()
-serveDNS domain port as nss maybeES = withSocketsDo $ do
+serveDNS :: Domain -> Int -> [String] -> [String] -> String -> Maybe ESConf -> IO ()
+serveDNS domain port as nss email maybeES = withSocketsDo $ do
   let conf =
         Conf
-        { confBufSize = 512
-        , confTTL     = 432000
-        , confDomain  = domain
-        , confTimeout = 3 * 1000 * 1000
-        , confPort    = port
-        , confAs      = map read as
-        , confNSs     = map B8.pack nss
+        { confBufSize  = 512
+        , confTTL      = 432000
+        , confDomain   = domain
+        , confTimeout  = 3 * 1000 * 1000
+        , confPort     = port
+        , confAs       = map read as
+        , confNSs      = map B8.pack nss
+        , confSOAemail = B8.pack email
         }
   addrinfos <-
     getAddrInfo
@@ -122,16 +124,18 @@ handleRequest conf req = fromMaybe notFound go
       Just q  ->
         let name = qname q in
         case qtype q of
-          A  ->
+          A   ->
             if name == domain
             then Just . response ident q . map (recordA name 300) $ confAs conf
             else do
               ip <- parseDomain (confDomain conf) $ name
               return . response ident q $ map (recordA name (confTTL conf)) [ip]
-          NS ->
+          NS  ->
             if domain `B8.isSuffixOf` name
             then Just . response ident q . map (recordNS name 300) $ confNSs conf
             else Nothing
+          SOA ->
+            Just $ response ident q [recordSOA name (head $ confNSs conf) (confSOAemail conf)]
           _  -> Nothing
 
 
@@ -205,3 +209,7 @@ recordA dom ttl ip = ResourceRecord dom A ttl $ RD_A ip
 
 recordNS :: Domain -> Int -> Domain -> ResourceRecord
 recordNS dom ttl domain = ResourceRecord dom NS ttl $ RD_NS domain
+
+
+recordSOA :: Domain -> Domain -> Domain -> ResourceRecord
+recordSOA dom ns email = ResourceRecord dom SOA 432000 $ RD_SOA ns email 1 10800 3600 604800 3600

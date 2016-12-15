@@ -25,11 +25,15 @@ main = do
               !pw <- getEnv "ES_PASS"
               return $ Just (EsUsername $ T.pack un, EsPassword $ T.pack pw)
         return $ Just (url, login)
+  let ns = case optsNSs opts of
+             [] -> [optsDomain opts]
+             ns -> ns
   serveDNS
     (B8.pack $ optsDomain opts)
     (optsPort opts)
     (optsAs opts)
-    (optsNSs opts)
+    ns
+    (optsEmail opts)
     esconf
  where
    opts = info (helper <*> options)
@@ -47,6 +51,7 @@ data Options = Options
   , optsEsUrl  :: Maybe Text
   , optsAs     :: [String]
   , optsNSs    :: [String]
+  , optsEmail  :: String
   }
 
 
@@ -86,3 +91,9 @@ options =
       <> help "NS record for DOMAIN"
       <> metavar "RECORD"
       ))
+  <*>
+    strOption
+    (  long "soa-email"
+    <> help "Email address for SOA record. Example: admin.example.com"
+    <> metavar "EMAIL"
+    )
