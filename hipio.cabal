@@ -23,7 +23,8 @@ library
                      , bytestring
                      , dns
                      , iproute
-                     , log
+                     , log-base
+                     , log-elasticsearch
                      , network
                      , random
                      , text
@@ -35,11 +36,11 @@ executable hipio
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N -O2
   build-depends:       base
                      , hipio
+                     , bloodhound
                      , bytestring
                      , optparse-applicative
                      , optparse-text
                      , text
-                     , bloodhound
   default-language:    Haskell2010
 
 test-suite hipio-test
@@ -49,13 +50,13 @@ test-suite hipio-test
   other-modules:       ParseSpec
   build-depends:       base
                      , hipio
-                     , QuickCheck
                      , attoparsec
                      , bytestring
                      , dns
                      , hspec
                      , hspec-attoparsec
                      , iproute
+                     , QuickCheck
                      , quickcheck-unicode
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010

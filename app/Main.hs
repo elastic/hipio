@@ -12,9 +12,9 @@ import           System.Environment
 
 main :: IO ()
 main = do
-  (domain, port, mbESUrl) <- execParser opts
+  opts <- execParser opts
   esconf <-
-    case mbESUrl of
+    case optsEsUrl opts of
       Nothing -> return Nothing
       Just url -> do
         mbUN <- lookupEnv "ES_USER"
@@ -25,7 +25,12 @@ main = do
               !pw <- getEnv "ES_PASS"
               return $ Just (EsUsername $ T.pack un, EsPassword $ T.pack pw)
         return $ Just (url, login)
-  serveDNS (B8.pack domain) port esconf
+  serveDNS
+    (B8.pack $ optsDomain opts)
+    (optsPort opts)
+    (optsAs opts)
+    (optsNSs opts)
+    esconf
  where
    opts = info (helper <*> options)
      ( fullDesc
@@ -35,9 +40,19 @@ main = do
        \ e.g. 127.0.0.1.<domain> maps to 127.0.0.1"
      )
 
-options :: Parser (String, Int, Maybe Text)
+
+data Options = Options
+  { optsDomain :: String
+  , optsPort   :: Int
+  , optsEsUrl  :: Maybe Text
+  , optsAs     :: [String]
+  , optsNSs    :: [String]
+  }
+
+
+options :: Parser Options
 options =
-  (,,)
+  Options
   <$>
     argument str
     (  metavar "DOMAIN"
@@ -56,4 +71,18 @@ options =
       (  long "es"
       <> help "Elasticsearch URL for Logging. Set `ES_USER` and `ES_PASS` environment variables for Basic Auth."
       <> metavar "URL"
+      ))
+  <*>
+    many (
+      strOption
+      (  short 'a'
+      <> help "A record for DOMAIN"
+      <> metavar "RECORD"
+      ))
+  <*>
+    many (
+      strOption
+      (  long "ns"
+      <> help "NS record for DOMAIN"
+      <> metavar "RECORD"
       ))

@@ -10,6 +10,7 @@ import           Control.Concurrent
 import           Control.Monad
 import           Control.Monad.IO.Class     (liftIO)
 import qualified Data.ByteString            as S
+import qualified Data.ByteString.Char8      as B8
 import qualified Data.ByteString.Lazy       as SL
 import           Data.IP
 import           Data.Maybe
@@ -33,11 +34,13 @@ import           Parse
 
 
 data Conf = Conf
-  { confBufSize :: Int
-  , confTTL     :: Int
-  , confDomain  :: Domain
-  , confTimeout :: Int
-  , confPort    :: Int
+  { confBufSize :: !Int
+  , confTTL     :: !Int
+  , confDomain  :: !Domain
+  , confTimeout :: !Int
+  , confPort    :: !Int
+  , confAs      :: ![IPv4]
+  , confNSs     :: ![Domain]
   }
   deriving Show
 
@@ -45,8 +48,8 @@ data Conf = Conf
 type ESConf = (Text, Maybe (EsUsername, EsPassword))
 
 
-serveDNS :: Domain -> Int -> Maybe ESConf -> IO ()
-serveDNS domain port maybeES = withSocketsDo $ do
+serveDNS :: Domain -> Int -> [String] -> [String] -> Maybe ESConf -> IO ()
+serveDNS domain port as nss maybeES = withSocketsDo $ do
   let conf =
         Conf
         { confBufSize = 512
@@ -54,6 +57,8 @@ serveDNS domain port maybeES = withSocketsDo $ do
         , confDomain  = domain
         , confTimeout = 3 * 1000 * 1000
         , confPort    = port
+        , confAs      = map read as
+        , confNSs     = map B8.pack nss
         }
   addrinfos <-
     getAddrInfo
@@ -71,40 +76,63 @@ serveDNS domain port maybeES = withSocketsDo $ do
     Nothing -> withSimpleStdOutLogger doit
     Just (url, login) -> do
       let es =
-            ElasticSearchConfig
-            { esServer = url
-            , esIndex = "logs"
+            defaultElasticSearchConfig
+            { esServer  = url
+            , esIndex   = "logs"
             , esMapping = "log"
-            , esLogin = login
+            , esLogin   = login
             }
       withElasticSearchLogger es randomIO doit
 
 
 handleRequest :: Conf -> DNSMessage -> DNSMessage
-handleRequest conf req = fromMaybe notFound parseHosts
+handleRequest conf req = fromMaybe notFound go
  where
-  filterA = filter ((==A) . qtype)
+  domain = confDomain conf<>"."
+
   ident = identifier . header $ req
+
   notFound =
-    defaultResponse
-    { header = (header defaultResponse) { identifier = ident }
-    , question = question req
+    DNSMessage
+    { header     =
+        DNSHeader
+        { identifier = ident
+        , flags = DNSFlags {
+              qOrR         = QR_Response
+            , opcode       = OP_STD
+            , authAnswer   = False
+            , trunCation   = False
+            , recDesired   = True
+            , recAvailable = False
+            , rcode        = NoErr
+            , authenData   = False
+            }
+        }
+    , question   = question req
+    , answer     = []
+    , authority  = []
+    , additional = []
     }
-  parseHosts = do
-    q <- listToMaybe . filterA . question $ req
-    let ip = maybeToList $ parseDomain (confDomain conf) $ qname q
-        rsp = responseA ident q ip
-        setTTL rr = rr { rrttl = confTTL conf }
-        hd = header rsp
-        flgs = (flags hd)
-               { recAvailable = False
-               , authAnswer = not $ Prelude.null ip
-               }
-    return $
-      rsp
-      { header = hd { flags = flgs }
-      , answer = map setTTL $ answer rsp
-      }
+
+  setTTL ttl rr = rr { rrttl = ttl }
+
+  go =
+    case listToMaybe $ question req of
+      Nothing -> Nothing
+      Just q  ->
+        let name = qname q in
+        case qtype q of
+          A  ->
+            if name == domain
+            then Just . response ident q . map (recordA name 300) $ confAs conf
+            else do
+              ip <- parseDomain (confDomain conf) $ name
+              return . response ident q $ map (recordA name (confTTL conf)) [ip]
+          NS ->
+            if domain `B.isSuffixOf` name
+            then Just . response ident q . map (recordNS name 300) $ confNSs conf
+            else Nothing
+          _  -> Nothing
 
 
 handlePacket :: Conf -> Socket -> SockAddr -> S.ByteString -> LogT IO ()
@@ -135,23 +163,27 @@ timeout' addr tm io = do
   return result
 
 
+defaultHeader :: Int -> DNSHeader
+defaultHeader ident =
+  DNSHeader
+  { identifier = ident
+  , flags = DNSFlags {
+        qOrR         = QR_Response
+      , opcode       = OP_STD
+      , authAnswer   = True
+      , trunCation   = False
+      , recDesired   = True
+      , recAvailable = False
+      , rcode        = NoErr
+      , authenData   = False
+      }
+  }
 
 
-defaultQuery :: DNSMessage
-defaultQuery = DNSMessage {
-    header = DNSHeader {
-       identifier = 0
-     , flags = DNSFlags {
-           qOrR         = QR_Query
-         , opcode       = OP_STD
-         , authAnswer   = False
-         , trunCation   = False
-         , recDesired   = True
-         , recAvailable = False
-         , rcode        = NoErr
-         , authenData   = False
-         }
-     }
+defaultResponse :: Int -> DNSMessage
+defaultResponse ident =
+  DNSMessage
+  { header     = defaultHeader ident
   , question   = []
   , answer     = []
   , authority  = []
@@ -159,17 +191,17 @@ defaultQuery = DNSMessage {
   }
 
 
-defaultResponse :: DNSMessage
-defaultResponse =
-  let hd = header defaultQuery
-      flg = flags hd
-  in  defaultQuery {
-        header = hd {
-          flags = flg {
-              qOrR = QR_Response
-            , authAnswer = False
-            , recAvailable = False
-            , authenData = False
-            }
-        }
-      }
+response :: Int -> Question -> [ResourceRecord] -> DNSMessage
+response ident q an =
+  (defaultResponse ident)
+  { question = [q]
+  , answer = an
+  }
+
+
+recordA :: Domain -> Int -> IPv4 -> ResourceRecord
+recordA dom ttl ip = ResourceRecord dom A ttl $ RD_A ip
+
+
+recordNS :: Domain -> Int -> Domain -> ResourceRecord
+recordNS dom ttl domain = ResourceRecord dom NS ttl $ RD_NS domain
