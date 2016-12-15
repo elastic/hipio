@@ -68,21 +68,12 @@ serveDNS domain port as nss email maybeES = withSocketsDo $ do
       Nothing
       (Just . show $ confPort conf)
   addrinfo <- maybe (fail "no addr info") return (listToMaybe addrinfos)
-  sockUDP <- socket (addrFamily addrinfo) Datagram defaultProtocol
-  bind sockUDP (addrAddress addrinfo)
-  sockTCP <- socket AF_INET Stream defaultProtocol
-  setSocketOption sockTCP ReuseAddr 1
-  setSocketOption sockTCP NoDelay 1
-  bind sockTCP (SockAddrInet (fromIntegral $ confPort conf) iNADDR_ANY)
-  listen sockTCP (max 1024 maxListenQueue)
-  let doit logger = do
-        forkIO . forever $ do
-          (bs, addrUDP) <- recvFrom sockUDP (confBufSize conf)
-          forkIO $ runLogT "" logger $ handlePacketUDP conf sockUDP addrUDP bs
+  sock <- socket (addrFamily addrinfo) Datagram defaultProtocol
+  bind sock (addrAddress addrinfo)
+  let doit logger =
         forever $ do
-          (sock, addrTCP) <- accept sockTCP
-          forkIO $ runLogT "" logger $ handlePacketTCP conf sock addrTCP
-
+          (bs, addr) <- recvFrom sock (confBufSize conf)
+          forkIO $ runLogT "" logger $ handlePacket conf sock addr bs
   case maybeES of
     Nothing -> withSimpleStdOutLogger doit
     Just (url, login) -> do
@@ -148,26 +139,13 @@ handleRequest conf req = fromMaybe notFound go
           _  -> Nothing
 
 
-handlePacketUDP :: Conf -> Socket -> SockAddr -> S.ByteString -> LogT IO ()
-handlePacketUDP conf@Conf{..} sock addr bs =
-  let sender packet = sendAllTo sock packet addr
-  in handlePacket conf addr bs sender
-
-
-handlePacketTCP :: Conf -> Socket -> SockAddr -> LogT IO ()
-handlePacketTCP conf sock addr = do
-  bs <- liftIO $ Network.Socket.ByteString.recv sock 4096
-  let sender = sendAll sock
-  handlePacket conf addr bs sender
-
-
-handlePacket :: Conf -> SockAddr -> S.ByteString -> (S.ByteString -> IO ()) -> LogT IO ()
-handlePacket conf@Conf{..} addr bs sender =
+handlePacket :: Conf -> Socket -> SockAddr -> S.ByteString -> LogT IO ()
+handlePacket conf@Conf{..} sock addr bs =
   case decode $ SL.fromChunks [bs] of
     Right req -> do
       let rsp = handleRequest conf req
       let packet = mconcat . SL.toChunks $ encode rsp
-      void $ timeout' addr confTimeout (sender packet)
+      void $ timeout' addr confTimeout (sendAllTo sock packet addr)
       case answer rsp of
         [] -> return ()
         (ResourceRecord { rdata = (RD_A ip) }):_ ->
