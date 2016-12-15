@@ -1,7 +1,12 @@
 resolver: lts-7.12
 packages:
 - '.'
-- 'log/log-elasticsearch'
+- location:
+    git: https://github.com/scrive/log.git
+    commit: 5298533b243869220ee585f89187500aba54093f
+  subdirs:
+  - log-elasticsearch
+  extra-dep: true
 extra-deps:
 - log-base-0.7
 - bloodhound-0.12.0.0

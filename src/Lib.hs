@@ -129,7 +129,7 @@ handleRequest conf req = fromMaybe notFound go
               ip <- parseDomain (confDomain conf) $ name
               return . response ident q $ map (recordA name (confTTL conf)) [ip]
           NS ->
-            if domain `B.isSuffixOf` name
+            if domain `B8.isSuffixOf` name
             then Just . response ident q . map (recordNS name 300) $ confNSs conf
             else Nothing
           _  -> Nothing
