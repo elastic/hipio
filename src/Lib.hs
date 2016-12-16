@@ -42,6 +42,7 @@ data Conf = Conf
   , confAs       :: ![IPv4]
   , confNSs      :: ![Domain]
   , confSOAemail :: !Domain
+  , confHostname :: !String
   }
   deriving Show
 
@@ -51,6 +52,7 @@ type ESConf = (Text, Maybe (EsUsername, EsPassword))
 
 serveDNS :: Domain -> Int -> [String] -> [String] -> String -> Maybe ESConf -> IO ()
 serveDNS domain port as nss email maybeES = withSocketsDo $ do
+  hostname <- getHostName
   let conf =
         Conf
         { confBufSize  = 512
@@ -61,6 +63,7 @@ serveDNS domain port as nss email maybeES = withSocketsDo $ do
         , confAs       = map read as
         , confNSs      = map B8.pack nss
         , confSOAemail = B8.pack email
+        , confHostname = hostname
         }
   addrinfos <-
     getAddrInfo
@@ -153,6 +156,7 @@ handlePacket conf@Conf{..} sock addr bs =
               "from" .= (show addr)
             , "question"  .= (decodeUtf8 . qname . head . question $ req)
             , "answer" .= show ip
+            , "server" .= confHostname
             ]
         _ -> return ()
     Left msg ->

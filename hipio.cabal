@@ -23,6 +23,7 @@ library
                      , bytestring
                      , dns
                      , iproute
+                     , hostname
                      , log-base
                      , log-elasticsearch
                      , network
