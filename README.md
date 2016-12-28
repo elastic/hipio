@@ -22,3 +22,21 @@ Available options:
   -a RECORD                A record for DOMAIN
   --ns RECORD              NS record for DOMAIN
 ```
+
+## Development
+
+### Build
+
+Create a binary in `dist/hipio`:
+
+```
+make
+```
+
+### Distribute
+
+Create a tinier binary (2-3mb):
+
+```
+make dist
+```
