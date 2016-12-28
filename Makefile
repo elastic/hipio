@@ -6,9 +6,11 @@ dist/hipio:
 		install \
 		--ghc-options '-fPIC' \
 		--split-objs
+
+dist: dist/hipio
 	upx -q --best --ultra-brute dist/hipio
 
 clean:
 	rm -rf dist
 
-.PHONY: clean
+.PHONY: clean dist
