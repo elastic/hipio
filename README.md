@@ -35,7 +35,7 @@ make
 
 ### Distribute
 
-Create a tinier binary (2-3mb):
+Make `dist/hipio` tinier (2-3mb):
 
 ```
 make dist
