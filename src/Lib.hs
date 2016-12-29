@@ -162,12 +162,12 @@ handlePacket conf@Conf{..} sock addr bs =
             , "server" .= confHostname
             ]
         _ -> return ()
-    Left msg ->
+    Left reason ->
       logAttention "Failed to decode message" $
         object
         [ "from" .= show addr
-        , "message" .= msg
-        , "data" .= (decodeUtf8 $ B64.encode bs)
+        , "reason" .= reason
+        , "message" .= (decodeUtf8 $ B64.encode bs)
         ]
 
 
