@@ -19,11 +19,12 @@ library
                      , Parse
   build-depends:       base >= 4.7 && < 5
                      , attoparsec
+                     , base64-bytestring
                      , bloodhound
                      , bytestring
                      , dns
-                     , iproute
                      , hostname
+                     , iproute
                      , log-base
                      , log-elasticsearch
                      , network

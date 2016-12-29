@@ -22,6 +22,7 @@ import           Database.Bloodhound
 import           Log
 import           Log.Backend.ElasticSearch
 import           Log.Backend.StandardOutput
+import qualified Data.ByteString.Base64 as B64
 import           Network.BSD
 import           Network.DNS
 import           Network.Socket             hiding (recvFrom)
@@ -102,8 +103,9 @@ handleRequest conf req = fromMaybe notFound go
     { header     =
         DNSHeader
         { identifier = ident
-        , flags = DNSFlags {
-              qOrR         = QR_Response
+        , flags =
+            DNSFlags
+            { qOrR         = QR_Response
             , opcode       = OP_STD
             , authAnswer   = False
             , trunCation   = False
@@ -152,15 +154,21 @@ handlePacket conf@Conf{..} sock addr bs =
       case answer rsp of
         [] -> return ()
         (ResourceRecord { rdata = (RD_A ip) }):_ ->
-          logInfo "" $ object [
-              "from" .= (show addr)
-            , "question"  .= (decodeUtf8 . qname . head . question $ req)
+          logInfo "" $
+            object
+            [ "from" .= show addr
+            , "question" .= (decodeUtf8 . qname . head . question $ req)
             , "answer" .= show ip
             , "server" .= confHostname
             ]
         _ -> return ()
     Left msg ->
-      logAttention "Failed to decode message" $ object [ "message" .= msg ]
+      logAttention "Failed to decode message" $
+        object
+        [ "from" .= show addr
+        , "message" .= msg
+        , "data" .= (decodeUtf8 $ B64.encode bs)
+        ]
 
 
 timeout' :: SockAddr -> Int -> IO a -> LogT IO (Maybe a)
@@ -175,8 +183,9 @@ defaultHeader :: Int -> DNSHeader
 defaultHeader ident =
   DNSHeader
   { identifier = ident
-  , flags = DNSFlags {
-        qOrR         = QR_Response
+  , flags =
+      DNSFlags
+      { qOrR         = QR_Response
       , opcode       = OP_STD
       , authAnswer   = True
       , trunCation   = False
