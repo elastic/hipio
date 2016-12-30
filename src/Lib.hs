@@ -10,11 +10,14 @@ import           Control.Concurrent
 import           Control.Exception.Safe     (bracketOnError, handle, tryAny)
 import           Control.Monad
 import           Control.Monad.IO.Class     (liftIO)
+import           Data.Array.Unboxed
 import qualified Data.ByteString            as S
 import qualified Data.ByteString.Base64     as B64
 import           Data.ByteString.Builder
 import qualified Data.ByteString.Char8      as B8
+import qualified Data.ByteString.Internal   as BI
 import qualified Data.ByteString.Lazy       as SL
+import           Data.Char                  (toLower)
 import           Data.Conduit.Attoparsec    (ParseError (..))
 import           Data.IP
 import           Data.Maybe
@@ -22,6 +25,7 @@ import           Data.Monoid
 import           Data.Text                  (Text (..))
 import qualified Data.Text                  as T
 import           Data.Text.Encoding         (decodeUtf8)
+import           Data.Word
 import           Database.Bloodhound        (EsPassword, EsUsername)
 import           Log
 import           Log.Backend.ElasticSearch
@@ -156,13 +160,13 @@ handleRequest conf req = fromMaybe notFound go
         let name = qname q in
         case qtype q of
           A   ->
-            if name == domain
+            if (lowercase name) == (lowercase domain)
             then Just . response ident q . map (recordA name 300) $ confAs conf
             else do
               ip <- parseDomain (confDomain conf) $ name
               return . response ident q $ map (recordA name (confTTL conf)) [ip]
           NS  ->
-            if domain `B8.isSuffixOf` name
+            if (lowercase domain) `B8.isSuffixOf` (lowercase name)
             then Just . response ident q . map (recordNS name 300) $ confNSs conf
             else Nothing
           SOA ->
@@ -290,3 +294,8 @@ recordNS dom ttl domain = ResourceRecord dom NS ttl $ RD_NS domain
 
 recordSOA :: Domain -> Domain -> Domain -> ResourceRecord
 recordSOA dom ns email = ResourceRecord dom SOA 432000 $ RD_SOA ns email 1 10800 3600 604800 3600
+
+ctype_lower = listArray (0,255) (map (BI.c2w . toLower) ['\0'..'\255']) :: UArray Word8 Word8
+
+lowercase :: S.ByteString -> S.ByteString
+lowercase = S.map (\x -> ctype_lower!x)

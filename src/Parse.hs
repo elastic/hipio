@@ -21,7 +21,7 @@ parser root = parseDomain
  where
   ipAndRoot = do
     r <- ip
-    void $ dot *> string root <* dot <* endOfInput
+    void $ dot *> stringCI root <* dot <* endOfInput
     return r
   parseDomain = try ipAndRoot <|> (anyChar `manyTill` dot *> parseDomain)
 
