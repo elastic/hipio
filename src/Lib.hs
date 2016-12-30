@@ -7,22 +7,25 @@ module Lib
 
 import           Control.Applicative
 import           Control.Concurrent
+import           Control.Exception.Safe     (bracketOnError, handle, tryAny)
 import           Control.Monad
 import           Control.Monad.IO.Class     (liftIO)
 import qualified Data.ByteString            as S
+import qualified Data.ByteString.Base64     as B64
+import           Data.ByteString.Builder
 import qualified Data.ByteString.Char8      as B8
 import qualified Data.ByteString.Lazy       as SL
+import           Data.Conduit.Attoparsec    (ParseError (..))
 import           Data.IP
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Text                  (Text (..))
 import qualified Data.Text                  as T
 import           Data.Text.Encoding         (decodeUtf8)
-import           Database.Bloodhound
+import           Database.Bloodhound        (EsPassword, EsUsername)
 import           Log
 import           Log.Backend.ElasticSearch
 import           Log.Backend.StandardOutput
-import qualified Data.ByteString.Base64 as B64
 import           Network.BSD
 import           Network.DNS
 import           Network.Socket             hiding (recvFrom)
@@ -72,12 +75,9 @@ serveDNS domain port as nss email maybeES = withSocketsDo $ do
       Nothing
       (Just . show $ confPort conf)
   addrinfo <- maybe (fail "no addr info") return (listToMaybe addrinfos)
-  sock <- socket (addrFamily addrinfo) Datagram defaultProtocol
-  bind sock (addrAddress addrinfo)
-  let doit logger =
-        forever $ do
-          (bs, addr) <- recvFrom sock (confBufSize conf)
-          forkIO $ runLogT "" logger $ handlePacket conf sock addr bs
+  let doit logger = do
+        forkIO $ doUDP addrinfo conf logger
+        doTCP addrinfo conf logger
   case maybeES of
     Nothing -> withSimpleStdOutLogger doit
     Just (url, login) -> do
@@ -89,6 +89,32 @@ serveDNS domain port as nss email maybeES = withSocketsDo $ do
             , esLogin   = login
             }
       withElasticSearchLogger es randomIO doit
+
+
+doUDP :: AddrInfo -> Conf -> Logger -> IO ()
+doUDP addrinfo conf logger = do
+  sock <- socket (addrFamily addrinfo) Datagram defaultProtocol
+  bind sock (addrAddress addrinfo)
+  forever $ do
+    (bs, addr) <- recvFrom sock (confBufSize conf)
+    forkIO $ runLogT "UDP" logger $ handleUDP conf sock addr bs
+
+
+doTCP :: AddrInfo -> Conf -> Logger -> IO ()
+doTCP addrinfo conf logger = do
+  sock <-
+    bracketOnError
+      (socket (addrFamily addrinfo) Stream defaultProtocol)
+      close
+      (\sock -> do
+          setSocketOption sock ReuseAddr 1
+          setSocketOption sock NoDelay 1
+          bind sock $ addrAddress addrinfo
+          listen sock $ max 1024 maxListenQueue
+          return sock)
+  forever $ do
+    (conn, addr) <- accept sock
+    forkIO $ runLogT "TCP" logger $ handleTCP conf conn addr
 
 
 handleRequest :: Conf -> DNSMessage -> DNSMessage
@@ -144,24 +170,14 @@ handleRequest conf req = fromMaybe notFound go
           _  -> Nothing
 
 
-handlePacket :: Conf -> Socket -> SockAddr -> S.ByteString -> LogT IO ()
-handlePacket conf@Conf{..} sock addr bs =
+handleUDP :: Conf -> Socket -> SockAddr -> S.ByteString -> LogT IO ()
+handleUDP conf@Conf{..} sock addr bs =
   case decode $ SL.fromChunks [bs] of
     Right req -> do
       let rsp = handleRequest conf req
       let packet = mconcat . SL.toChunks $ encode rsp
-      void $ timeout' addr confTimeout (sendAllTo sock packet addr)
-      case answer rsp of
-        [] -> return ()
-        (ResourceRecord { rdata = (RD_A ip) }):_ ->
-          logInfo "" $
-            object
-            [ "from" .= show addr
-            , "question" .= (decodeUtf8 . qname . head . question $ req)
-            , "answer" .= show ip
-            , "server" .= confHostname
-            ]
-        _ -> return ()
+      void $ timeout' addr confTimeout $ sendAllTo sock packet addr
+      logDNS conf addr req rsp
     Left reason ->
       logAttention "Failed to decode message" $
         object
@@ -169,6 +185,54 @@ handlePacket conf@Conf{..} sock addr bs =
         , "reason" .= reason
         , "message" .= (decodeUtf8 $ B64.encode bs)
         ]
+
+
+handleTCP :: Conf -> Socket -> SockAddr -> LogT IO ()
+handleTCP conf sock addr = do
+  r <- tryAny $ handle handleParseError $ timeout' addr (confTimeout conf) $ receiveVC sock
+  case r of
+    Left err ->
+      logAttention "Failed to receive request" $
+        object
+        [ "from" .= show addr
+        , "reason" .= show err
+        , "server" .= confHostname conf
+        ]
+    Right Nothing -> return ()
+    Right (Just req) -> do
+      let rsp = handleRequest conf req
+      let bs = encode rsp
+      let packet = mconcat . SL.toChunks . toLazyByteString $
+                     word16BE (fromIntegral (SL.length bs)) <>
+                     lazyByteString bs
+      void $ timeout' addr (confTimeout conf) $ sendAll sock packet
+      logDNS conf addr req rsp
+  liftIO $ close sock
+ where
+  handleParseError :: ParseError -> LogT IO (Maybe DNSMessage)
+  handleParseError err = do
+    logAttention "ParseError" $
+      object
+      [ "from" .= show addr
+      , "reason" .= errorMessage err
+      , "server" .= confHostname conf
+      ]
+    return Nothing
+
+
+logDNS :: Conf -> SockAddr -> DNSMessage -> DNSMessage -> LogT IO ()
+logDNS conf addr req rsp = do
+  case answer rsp of
+    [] -> return ()
+    (ResourceRecord { rdata = (RD_A ip) }):_ ->
+      logInfo "" $
+        object
+        [ "from" .= show addr
+        , "question" .= (decodeUtf8 . qname . head . question $ req)
+        , "answer" .= show ip
+        , "server" .= confHostname conf
+        ]
+    _ -> return ()
 
 
 timeout' :: SockAddr -> Int -> IO a -> LogT IO (Maybe a)
