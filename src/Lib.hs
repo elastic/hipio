@@ -188,19 +188,20 @@ handleUDP conf@Conf{..} sock addr bs =
         [ "from" .= show addr
         , "reason" .= reason
         , "message" .= (decodeUtf8 $ B64.encode bs)
+        , "server" .= confHostname
         ]
 
 
 handleTCP :: Conf -> Socket -> SockAddr -> LogT IO ()
-handleTCP conf sock addr = do
-  r <- tryAny $ handle handleParseError $ timeout' addr (confTimeout conf) $ receiveVC sock
+handleTCP conf@Conf{..} sock addr = do
+  r <- tryAny $ handle handleParseError $ timeout' addr confTimeout $ receiveVC sock
   case r of
     Left err ->
       logAttention "Failed to receive request" $
         object
         [ "from" .= show addr
         , "reason" .= show err
-        , "server" .= confHostname conf
+        , "server" .= confHostname
         ]
     Right Nothing -> return ()
     Right (Just req) -> do
@@ -209,7 +210,7 @@ handleTCP conf sock addr = do
       let packet = mconcat . SL.toChunks . toLazyByteString $
                      word16BE (fromIntegral (SL.length bs)) <>
                      lazyByteString bs
-      void $ timeout' addr (confTimeout conf) $ sendAll sock packet
+      void $ timeout' addr confTimeout $ sendAll sock packet
       logDNS conf addr req rsp
   liftIO $ close sock
  where
@@ -219,7 +220,7 @@ handleTCP conf sock addr = do
       object
       [ "from" .= show addr
       , "reason" .= errorMessage err
-      , "server" .= confHostname conf
+      , "server" .= confHostname
       ]
     return Nothing
 
