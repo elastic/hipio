@@ -68,7 +68,7 @@ options =
     ( metavar "PORT"
     <> value 53
     <> showDefault
-    <> help "Listening UDP port."
+    <> help "Listening port."
     )
   <*>
     optional (
