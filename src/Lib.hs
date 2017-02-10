@@ -7,7 +7,8 @@ module Lib
 
 import           Control.Applicative
 import           Control.Concurrent
-import           Control.Exception.Safe     (bracketOnError, handle, tryAny)
+import           Control.Exception.Safe     (SomeException, bracketOnError,
+                                             catchAny, handle, tryAny)
 import           Control.Monad
 import           Control.Monad.IO.Class     (liftIO)
 import           Data.Array.Unboxed
@@ -96,29 +97,40 @@ serveDNS domain port as nss email maybeES = withSocketsDo $ do
 
 
 doUDP :: AddrInfo -> Conf -> Logger -> IO ()
-doUDP addrinfo conf logger = do
-  sock <- socket (addrFamily addrinfo) Datagram defaultProtocol
-  bind sock (addrAddress addrinfo)
-  forever $ do
-    (bs, addr) <- recvFrom sock (confBufSize conf)
-    forkIO $ runLogT "UDP" logger $ handleUDP conf sock addr bs
+doUDP addrinfo conf logger =
+  forever $ catchAny go (logExceptions "UDP" logger)
+ where
+  go = do
+    sock <- socket (addrFamily addrinfo) Datagram defaultProtocol
+    bind sock (addrAddress addrinfo)
+    forever $ do
+      (bs, addr) <- recvFrom sock (confBufSize conf)
+      forkIO $ runLogT "UDP" logger $ handleUDP conf sock addr bs
 
 
 doTCP :: AddrInfo -> Conf -> Logger -> IO ()
-doTCP addrinfo conf logger = do
-  sock <-
-    bracketOnError
-      (socket (addrFamily addrinfo) Stream defaultProtocol)
-      close
-      (\sock -> do
-          setSocketOption sock ReuseAddr 1
-          setSocketOption sock NoDelay 1
-          bind sock $ addrAddress addrinfo
-          listen sock $ max 1024 maxListenQueue
-          return sock)
-  forever $ do
-    (conn, addr) <- accept sock
-    forkIO $ runLogT "TCP" logger $ handleTCP conf conn addr
+doTCP addrinfo conf logger =
+  forever $ catchAny go (logExceptions "TCP" logger)
+ where
+  go = do
+    sock <-
+      bracketOnError
+        (socket (addrFamily addrinfo) Stream defaultProtocol)
+        close
+        (\sock -> do
+            setSocketOption sock ReuseAddr 1
+            setSocketOption sock NoDelay 1
+            bind sock $ addrAddress addrinfo
+            listen sock $ max 1024 maxListenQueue
+            return sock)
+    forever $ do
+      (conn, addr) <- accept sock
+      forkIO $ runLogT "TCP" logger $ handleTCP conf conn addr
+
+
+logExceptions :: Text -> Logger -> SomeException -> IO ()
+logExceptions name logger e =
+  runLogT name logger $ logAttention "ERROR" $ object ["exception" .= show e]
 
 
 handleRequest :: Conf -> DNSMessage -> DNSMessage
