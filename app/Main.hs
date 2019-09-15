@@ -1,10 +1,10 @@
 {-# LANGUAGE BangPatterns #-}
 module Main where
 
-import qualified Data.ByteString.Char8 as B8
-import           Data.Text             (Text)
-import qualified Data.Text             as T
-import           Database.Bloodhound   (EsPassword (..), EsUsername (..))
+import qualified Data.ByteString.Char8    as B8
+import           Data.Text                (Text)
+import qualified Data.Text                as T
+import           Database.V5.Bloodhound   (EsPassword (..), EsUsername (..))
 import           Lib
 import           Options.Applicative
 import           Options.Applicative.Text (textOption)

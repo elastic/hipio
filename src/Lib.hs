@@ -7,36 +7,36 @@ module Lib
 
 import           Control.Applicative
 import           Control.Concurrent
-import           Control.Exception.Safe     (SomeException, bracketOnError,
-                                             catchAny, handle, tryAny)
+import           Control.Exception.Safe       (SomeException, bracketOnError,
+                                                catchAny, handle, tryAny)
 import           Control.Monad
-import           Control.Monad.IO.Class     (liftIO)
+import           Control.Monad.IO.Class       (liftIO)
 import           Data.Array.Unboxed
-import qualified Data.ByteString            as S
-import qualified Data.ByteString.Base64     as B64
+import qualified Data.ByteString              as S
+import qualified Data.ByteString.Base64       as B64
 import           Data.ByteString.Builder
-import qualified Data.ByteString.Char8      as B8
-import qualified Data.ByteString.Internal   as BI
-import qualified Data.ByteString.Lazy       as SL
-import           Data.Char                  (toLower)
-import           Data.Conduit.Attoparsec    (ParseError (..))
+import qualified Data.ByteString.Char8        as B8
+import qualified Data.ByteString.Internal     as BI
+import qualified Data.ByteString.Lazy         as SL
+import           Data.Char                    (toLower)
+import           Data.Conduit.Attoparsec      (ParseError (..))
 import           Data.IP
 import           Data.Maybe
 import           Data.Monoid
-import           Data.Text                  (Text (..))
-import qualified Data.Text                  as T
-import           Data.Text.Encoding         (decodeUtf8)
+import           Data.Text                    (Text (..))
+import qualified Data.Text                    as T
+import           Data.Text.Encoding           (decodeUtf8)
 import           Data.Word
-import           Database.Bloodhound        (EsPassword, EsUsername)
+import           Database.V5.Bloodhound       (EsPassword, EsUsername)
 import           Log
-import           Log.Backend.ElasticSearch
+import           Log.Backend.ElasticSearch.V5
 import           Log.Backend.StandardOutput
 import           Network.BSD
 import           Network.DNS
-import           Network.Socket             hiding (recvFrom)
+import           Network.Socket               hiding (recvFrom)
 import           Network.Socket.ByteString
 import           System.Environment
-import           System.Random              (randomIO)
+import           System.Random                (randomIO)
 import           System.Timeout
 
 import           Parse
@@ -90,7 +90,7 @@ serveDNS domain port as nss email maybeES = withSocketsDo $ do
             defaultElasticSearchConfig
             { esServer  = url
             , esIndex   = "logs"
-            , esMapping = "log"
+            , esMapping = "_doc"
             , esLogin   = login
             }
       withElasticSearchLogger es randomIO doit
