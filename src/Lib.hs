@@ -89,7 +89,7 @@ serveDNS domain port as nss email maybeES = withSocketsDo $ do
       let es =
             defaultElasticSearchConfig
             { esServer  = url
-            , esIndex   = "logs"
+            , esIndex   = "hipio-logs"
             , esMapping = "_doc"
             , esLogin   = login
             }
