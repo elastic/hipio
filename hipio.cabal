@@ -1,5 +1,5 @@
 name:                hipio
-version:             0.3.1
+version:             0.4.0
 synopsis:            Initial project template from stack
 description:         Please see README.md
 homepage:            https://github.com/elastic/hipio
@@ -21,14 +21,12 @@ library
                      , attoparsec
                      , base64-bytestring
                      , array
-                     , bloodhound
                      , bytestring
                      , conduit-extra
                      , dns
                      , hostname
                      , iproute
                      , log-base
-                     , log-elasticsearch
                      , network
                      , random
                      , safe-exceptions
@@ -41,7 +39,6 @@ executable hipio
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N -O2
   build-depends:       base
                      , hipio
-                     , bloodhound
                      , bytestring
                      , optparse-applicative
                      , optparse-text
