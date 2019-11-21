@@ -27,9 +27,7 @@ import           Data.Text                    (Text (..))
 import qualified Data.Text                    as T
 import           Data.Text.Encoding           (decodeUtf8)
 import           Data.Word
-import           Database.V5.Bloodhound       (EsPassword, EsUsername)
 import           Log
-import           Log.Backend.ElasticSearch.V5
 import           Log.Backend.StandardOutput
 import           Network.BSD
 import           Network.DNS
@@ -56,11 +54,8 @@ data Conf = Conf
   deriving Show
 
 
-type ESConf = (Text, Maybe (EsUsername, EsPassword))
-
-
-serveDNS :: Domain -> Int -> [String] -> [String] -> String -> Maybe ESConf -> IO ()
-serveDNS domain port as nss email maybeES = withSocketsDo $ do
+serveDNS :: Domain -> Int -> [String] -> [String] -> String -> IO ()
+serveDNS domain port as nss email = withSocketsDo $ do
   hostname <- getHostName
   let conf =
         Conf
@@ -83,18 +78,7 @@ serveDNS domain port as nss email maybeES = withSocketsDo $ do
   let doit logger = do
         forkIO $ doUDP addrinfo conf logger
         doTCP addrinfo conf logger
-  case maybeES of
-    Nothing -> withSimpleStdOutLogger doit
-    Just (url, login) -> do
-      let es =
-            defaultElasticSearchConfig
-            { esServer  = url
-            , esIndex   = "hipio-logs"
-            , esMapping = "_doc"
-            , esLogin   = login
-            }
-      withElasticSearchLogger es randomIO doit
-
+  withSimpleStdOutLogger doit
 
 doUDP :: AddrInfo -> Conf -> Logger -> IO ()
 doUDP addrinfo conf logger =
