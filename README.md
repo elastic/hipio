@@ -18,10 +18,10 @@ Available options:
   -h,--help                Show this help text
   DOMAIN                   Root wildcard domain.
   PORT                     Listening port. (default: 53)
-  --es URL                 Elasticsearch URL for Logging. Set `ES_USER` and
-                           `ES_PASS` environment variables for Basic Auth.
   -a RECORD                A record for DOMAIN
   --ns RECORD              NS record for DOMAIN
   --soa-email EMAIL        Email address for SOA record. Example:
                            admin.example.com
 ```
+
+hipio logs DNS request activity to standard output.
