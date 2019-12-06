@@ -9,7 +9,7 @@ And it has tests.
 ```
 hipio - Wildcard DNS Server for any IP Address
 
-Usage: hipio DOMAIN [PORT] [--es URL] [-a RECORD] [--ns RECORD]
+Usage: hipio DOMAIN [PORT] [-a RECORD] [--ns RECORD]
              --soa-email EMAIL
   hipio maps <anything>.<IP Address>.<domain> to the corresponding <IP Address>,
   e.g. 127.0.0.1.<domain> maps to 127.0.0.1
