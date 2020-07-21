@@ -28,7 +28,7 @@ import qualified Data.Text                    as T
 import           Data.Text.Encoding           (decodeUtf8)
 import           Data.Word
 import           Log
-import           Log.Backend.StandardOutput
+import           Log.Backend.StandardOutput.Bulk
 import           Network.BSD
 import           Network.DNS
 import           Network.Socket               hiding (recvFrom)
@@ -78,7 +78,7 @@ serveDNS domain port as nss email = withSocketsDo $ do
   let doit logger = do
         forkIO $ doUDP addrinfo conf logger
         doTCP addrinfo conf logger
-  withSimpleStdOutLogger doit
+  withBulkStdOutLogger doit
 
 doUDP :: AddrInfo -> Conf -> Logger -> IO ()
 doUDP addrinfo conf logger =

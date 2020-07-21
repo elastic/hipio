@@ -1,6 +1,6 @@
 resolver: lts-7.12
 extra-deps:
-- log-base-0.8.0.0
+- log-base-0.8.0.1
 - unliftio-core-0.1.2.0
 - hpqtypes-1.5.1.1
 - aeson-1.0.1.0
