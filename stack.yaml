@@ -1,6 +1,9 @@
 resolver: lts-7.12
 extra-deps:
-- log-base-0.8.0.1
+- git: https://github.com/olksdr/log.git
+  commit: 4a9f7e56adf052f8331f70a565d5650206be76e5
+  subdirs:
+    - log-base
 - unliftio-core-0.1.2.0
 - hpqtypes-1.5.1.1
 - aeson-1.0.1.0
