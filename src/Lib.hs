@@ -78,7 +78,7 @@ serveDNS domain port as nss email = withSocketsDo $ do
   let doit logger = do
         forkIO $ doUDP addrinfo conf logger
         doTCP addrinfo conf logger
-  withBulkStdOutLogger doit
+  withBulkJsonStdOutLogger doit
 
 doUDP :: AddrInfo -> Conf -> Logger -> IO ()
 doUDP addrinfo conf logger =
