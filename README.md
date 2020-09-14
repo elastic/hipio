@@ -28,8 +28,6 @@ hipio logs DNS request activity to standard output in the form for [jsonlines](h
 
 ```json
 ...
-{"component":"UDP","data":{"from":"127.0.0.1:41612","answer":"10.2.1.1","server":"ec2121e7bdd4","question":"10.2.1.1.example.com."},"insertion_time":"","message":"","timestamp":"2020-07-22 06:01:47","level":"INFO"}
-{"component":"UDP","data":{"from":"127.0.0.1:39803","answer":"10.22.1.3","server":"ec2121e7bdd4","question":"10.22.1.3.example.com."},"insertion_time":"","message":"","timestamp":"2020-07-22 06:01:47","level":"INFO"}
-{"component":"UDP","data":{"from":"127.0.0.1:56574","answer":"10.222.10.2","server":"ec2121e7bdd4","question":"10.222.10.2.example.com."},"insertion_time":"","message":"","timestamp":"2020-07-22 06:01:47","level":"INFO"}
+{"component":"UDP","domain":[],"time":"2020-09-14T08:19:16.9779543Z","level":"info","message":"","data":{"from":"127.0.0.1:57093","answer":"1.2.1.1","server":"ec2121e7bdd4","question":"1.2.1.1.example.com."}}
 ...
 ```
